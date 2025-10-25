@@ -35,6 +35,12 @@ func New() *Dispatcher {
 	}
 }
 
+// Register binds a channel name (e.g. "email") to its handler
+func (d *Dispatcher) Register(channel NotChannel, handler Handler) {
+	d.handlers[channel] = handler
+	log.Printf("?? Registered handler for channel: %s", channel)
+}
+
 func (d *Dispatcher) Dispatch(rawMsg []byte)  {
 	var notification Notification
 	if err := json.Unmarshal(rawMsg, &notification); err != nil {

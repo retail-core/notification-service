@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
+	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/retail-core/notification-service/internal/channels/email"
 	"github.com/retail-core/notification-service/internal/config"
+	"github.com/retail-core/notification-service/internal/dispatcher"
 	"github.com/retail-core/notification-service/internal/queue"
 )
 
@@ -20,13 +20,19 @@ func main() {
 
 	rabbit.DeclareQueue("notifications")
 
-	fmt.Printf("Notification service starting on port %s\n", cfg.Port)
+	messages, _ := rabbit.Consume("notifications")
 
-	http.HandleFunc("/api/not-s/ping", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("pong"))
-	})
+	d := dispatcher.New()
 
-	if err := http.ListenAndServe(":"+cfg.Port, nil); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	d.Register(dispatcher.EmailChannel, email.NewEmailHandler())
+
+	go func() {
+		for msg := range messages {
+			d.Dispatch(msg.Body)
+		}
+	}()
+
+	for {
+		time.Sleep(10 * time.Second)
 	}
 }
