@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-
 	"github.com/joho/godotenv"
 )
 
@@ -11,6 +10,12 @@ type Config struct {
 	PostgresUrl    string
 	Port           string
 	Environment    string
+
+	POSTMARKServerToken string
+	POSTMARKAccountToken string
+	POSTMARKFromEmail    string
+	POSTMARKToEmail      string	
+	POSTMARKFromName     string
 }
 
 func LoadConfig() *Config {
@@ -18,12 +23,17 @@ func LoadConfig() *Config {
 
 	
 	return &Config{
-		RabbitMQUrl: getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
-		PostgresUrl: getEnv("POSTGRES_URL", "postgres://user:password@localhost:5432/dbname?sslmode=disable"),
+		RabbitMQUrl: getEnv("RABBITMQ_URL", ""),
+		PostgresUrl: getEnv("POSTGRES_URL", ""),
 		Port:        getEnv("PORT", "8080"),
 		Environment: getEnv("ENVIRONMENT", "development"),
+		POSTMARKServerToken: getEnv("POSTMARK_SERVER_TOKEN", ""),
+		POSTMARKAccountToken: getEnv("POSTMARK_ACCOUNT_TOKEN", ""),
+		POSTMARKFromEmail:    getEnv("POSTMARK_FROM_EMAIL", "info@jarabiz.com"),
+		POSTMARKFromName:     getEnv("POSTMARK_FROM_NAME", "Jara-Biz"),
+		POSTMARKToEmail:      getEnv("POSTMARK_TO_EMAIL", "hello@jarabiz.com"),
 	}
-}
+	}
 
 func getEnv(key, def string) string {
 	val, exists := os.LookupEnv(key)

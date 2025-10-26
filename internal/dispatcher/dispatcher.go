@@ -2,8 +2,8 @@ package dispatcher
 
 import (
 	"encoding/json"
-	"log"
-	"strings"
+	"github.com/retail-core/notification-service/internal/logger"
+	"go.uber.org/zap"
 )
 
 type NotChannel string
@@ -38,25 +38,26 @@ func New() *Dispatcher {
 // Register binds a channel name (e.g. "email") to its handler
 func (d *Dispatcher) Register(channel NotChannel, handler Handler) {
 	d.handlers[channel] = handler
-	log.Printf("?? Registered handler for channel: %s", channel)
+	logger.L().Info("Registered handler for channel", zap.String("channel", string(channel)))
 }
 
 func (d *Dispatcher) Dispatch(rawMsg []byte)  {
 	var notification Notification
 	if err := json.Unmarshal(rawMsg, &notification); err != nil {
-		log.Printf("failed to unmarshal notification: %v", err)
+		logger.L().Error("Failed to unmarshal notification", zap.Error(err))
 		return
 	}
 
 	handler, ok := d.handlers[notification.Channel]
 	if !ok {
-		log.Printf("no handler found for channel: %s", notification.Channel)
+		logger.L().Error("No handler registered for channel", zap.String("channel", string(notification.Channel)))
 		return
 	}
 
 	if err := handler.Send(notification); err != nil {
-		log.Printf("failed to send notification: %v", err)
-	} else {
-		log.Printf("notification sent via %s to %s", strings.ToUpper(string(notification.Channel)), notification.To)
+		logger.L().Error("Failed to send notification", zap.Error(err))
 	}
+	// } else {
+	// 	logger.L().Info("Notification sent", zap.String("channel", strings.ToUpper(string(notification.Channel))), zap.String("to", notification.To))
+	// }
 }
