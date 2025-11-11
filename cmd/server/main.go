@@ -21,21 +21,14 @@ func main() {
 	rabbit := queue.NewRabbitConnection(cfg.RabbitMQUrl)
 	defer rabbit.Close()
 
-	rabbit.DeclareQueue("notifications")
-
-	messages, _ := rabbit.Consume("notifications")
-
 	d := dispatcher.New()
 
 	d.Register(dispatcher.EmailChannel, email.NewPostmarkHandler(cfg))
 
-	logger.L().Info("Notification Service is started")
+	rabbit.SetupNotificationBindings()
+	rabbit.ConsumeNotifications(d)
 
-	go func() {
-		for msg := range messages {
-			d.Dispatch(msg.Body)
-		}
-	}()
+	logger.L().Info("Notification Service is started")
 
 	for {
 		time.Sleep(10 * time.Second)

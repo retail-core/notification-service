@@ -57,7 +57,4 @@ func (d *Dispatcher) Dispatch(rawMsg []byte)  {
 	if err := handler.Send(notification); err != nil {
 		logger.L().Error("Failed to send notification", zap.Error(err))
 	}
-	// } else {
-	// 	logger.L().Info("Notification sent", zap.String("channel", strings.ToUpper(string(notification.Channel))), zap.String("to", notification.To))
-	// }
 }
