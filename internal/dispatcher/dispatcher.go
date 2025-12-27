@@ -12,6 +12,8 @@ const (
 	EmailChannel NotChannel = "email"
 	SMSChannel   NotChannel = "sms"
 	PushChannel  NotChannel = "push"
+	InAppChannel NotChannel = "inapp"
+	InventoryUpdateChannel NotChannel = "inventory_update"
 )
 
 type Notification struct {
@@ -38,7 +40,6 @@ func New() *Dispatcher {
 // Register binds a channel name (e.g. "email") to its handler
 func (d *Dispatcher) Register(channel NotChannel, handler Handler) {
 	d.handlers[channel] = handler
-	logger.L().Info("Registered handler for channel", zap.String("channel", string(channel)))
 }
 
 func (d *Dispatcher) Dispatch(rawMsg []byte)  {

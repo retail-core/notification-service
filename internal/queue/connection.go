@@ -96,6 +96,8 @@ func (r *RabbitConnection) ConsumeNotifications(d *dispatcher.Dispatcher) error 
 		dispatcher.EmailChannel,
 		dispatcher.SMSChannel,
 		dispatcher.PushChannel,
+		dispatcher.InAppChannel,
+		dispatcher.InventoryUpdateChannel,
 	}
 
 	for _, c := range channels {
@@ -137,6 +139,8 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 		dispatcher.EmailChannel,
 		dispatcher.SMSChannel,
 		dispatcher.PushChannel,
+		dispatcher.InAppChannel,
+		dispatcher.InventoryUpdateChannel,
 	}
 
 	for _, channel := range channels {

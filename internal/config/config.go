@@ -6,6 +6,7 @@ import (
 )
 
 type Config struct {
+	DB_SOURCE      string
 	RabbitMQUrl    string
 	PostgresUrl    string
 	Port           string
@@ -23,6 +24,7 @@ func LoadConfig() *Config {
 
 	
 	return &Config{
+		DB_SOURCE:   getEnv("DB_SOURCE", ""),
 		RabbitMQUrl: getEnv("RABBITMQ_URL", ""),
 		PostgresUrl: getEnv("POSTGRES_URL", ""),
 		Port:        getEnv("PORT", "8080"),
