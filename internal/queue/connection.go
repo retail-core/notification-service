@@ -7,6 +7,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/retail-core/notification-service/internal/dispatcher"
 	"github.com/retail-core/notification-service/internal/logger"
+	"go.uber.org/zap"
 )
 
 type RabbitConnection struct {
@@ -71,13 +72,11 @@ func (r *RabbitConnection) Consume(queue string) (<-chan amqp.Delivery, error) {
 	return msgs, nil
 }
 
-// Close closes the connection cleanly
 func (r *RabbitConnection) Close() {
 	log.Println("🧹 Closing RabbitMQ connection...")
 	r.ch.Close()
 	r.conn.Close()
 }
-
 
 func failOnError(err error, msg string) {
   if err != nil {
@@ -124,7 +123,7 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 	// Declare the exchange
 	if err := r.ch.ExchangeDeclare(
 		exchange,
-		"direct", // simple routing by key: "email", "sms", "inapp"
+		"topic", // simple routing by key: "email", "sms", "inapp"
 		true,     // durable
 		false,
 		false,
@@ -156,6 +155,7 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 			nil,
 		)
 		if err != nil {
+			logger.L().Error("Failed to declare queue", zap.String("queue", string(queueName)), zap.Error(err))
 			return err
 		}
 
@@ -167,9 +167,11 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 			false,
 			nil,
 		); err != nil {
+			logger.L().Error("Failed to bind queue to exchange", zap.String("queue", q.Name), zap.String("exchange", exchange), zap.String("routing_key", string(channel)), zap.Error(err))
 			return err
 		}
 	}
 
+	logger.L().Info("✅ RabbitMQ notification bindings set up successfully DDL")
 	return nil
 }

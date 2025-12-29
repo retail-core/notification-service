@@ -10,10 +10,10 @@ import (
 	"go.uber.org/zap"
 )
 
-type EmailHandler struct{
-	client *postmark.Client
-	fromEmail string
-	fromName  string
+type EmailHandler struct {
+	client           *postmark.Client
+	fromEmail        string
+	fromName         string
 	defaultRecipient *string
 }
 
@@ -25,9 +25,9 @@ func NewPostmarkHandler(cfg *config.Config) *EmailHandler {
 	}
 
 	return &EmailHandler{
-		client: postmark.NewClient(cfg.POSTMARKServerToken, cfg.POSTMARKAccountToken),
-		fromEmail: cfg.POSTMARKFromEmail,
-		fromName:  cfg.POSTMARKFromEmail,
+		client:           postmark.NewClient(cfg.POSTMARKServerToken, cfg.POSTMARKAccountToken),
+		fromEmail:        cfg.POSTMARKFromEmail,
+		fromName:         cfg.POSTMARKFromEmail,
 		defaultRecipient: defaultRecipient,
 	}
 }
@@ -37,18 +37,35 @@ func (p *EmailHandler) Send(notification dispatcher.Notification) error {
 
 	recipientEmail := p.resolveRecipient(notification)
 
+	var templateModel map[string]any
+
+	if notification.Template == "staff-invitation" {
+		templateModel = map[string]any{
+			"product_url":    "www.jarabiz.netlify.com",
+			"product_name":   "",
+			"username":        notification.Data["username"],
+			"otp":             notification.Data["otp"],
+			"company_name":    "Jara-Biz",
+			"company_address": "Benin City, Nigeria",
+			"store_name":      notification.Data["store_name"],
+			"temporary_password":       notification.Data["temporary_password"],
+		}
+	} else {
+		templateModel = map[string]any{
+			"product_url":     "www.jarabiz.netlify.com",
+			"product_name":    "",
+			"username":        notification.Data["username"],
+			"otp":             notification.Data["otp"],
+			"company_name":    "Jara-Biz",
+			"company_address": "Benin City, Nigeria",
+		}
+	}
+
 	email := postmark.TemplatedEmail{
-		From:     p.fromEmail,
-		To:       recipientEmail,
+		From:          p.fromEmail,
+		To:            recipientEmail,
 		TemplateAlias: notification.Template,
-		TemplateModel: map[string]any {
-    		"product_url": "www.jarabiz.com",
-    		"product_name": "Jara-Biz - POS",
-			"username": notification.Data["username"],
-			"otp": notification.Data["otp"],
-			"company_name": "Jara-Biz",
-			"company_address": "No. 33 Odia Street, GRA Benin City, Nigeria",
-		},
+		TemplateModel: templateModel,
 	}
 
 	res, err := p.client.SendTemplatedEmail(context.Background(), email)
@@ -58,16 +75,19 @@ func (p *EmailHandler) Send(notification dispatcher.Notification) error {
 		return err
 	}
 
-	log.Info("Email sent via Postmark", zap.String("to", notification.To), zap.String("messageID",  res.MessageID))
+	log.Info("Email sent via Postmark", zap.String("to", notification.To), zap.String("messageID", res.MessageID))
 	return nil
 }
 
 func (p *EmailHandler) resolveRecipient(n dispatcher.Notification) string {
-	if p.defaultRecipient != nil && *p.defaultRecipient != "" {
-		return *p.defaultRecipient
-	}
-	if n.To != "" {
-		return n.To
-	}
-	return p.fromEmail
+
+	return n.To
+
+	// if p.defaultRecipient != nil && *p.defaultRecipient != "" {
+	// 	return *p.defaultRecipient
+	// }
+	// if n.To != "" {
+	// 	return n.To
+	// }
+	// return p.fromEmail
 }
