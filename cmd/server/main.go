@@ -53,15 +53,12 @@ func main() {
 	_dispatcher.Register(dispatcher.InAppChannel, channels.NewInAppHandler(hub, repository.NewGormNotificationRepository(database)))
 	_dispatcher.Register(dispatcher.InventoryUpdateChannel, channels.NewInventoryUpdateChannel(repository.NewGormNotificationRepository(database)))
 
-	err =rabbit.SetupNotificationBindings()
+	err = rabbit.SetupNotificationBindings()
 	if err != nil {
 		log.Fatal("Failed to setup RabbitMQ notification bindings", zap.Error(err))
 	}
 
-	err = rabbit.ConsumeNotifications(_dispatcher)
-	if err != nil {
-		log.Fatal("Failed to consume notifications", zap.Error(err))
-	}
+	go rabbit.ConsumeNotificationsWithReconnect(_dispatcher)
 
 	log.Info("Notification Service initialized, starting HTTP server...", zap.String("port", cfg.Port))
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {

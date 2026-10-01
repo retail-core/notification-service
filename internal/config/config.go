@@ -27,7 +27,7 @@ func LoadConfig() *Config {
 		DB_SOURCE:   getEnv("DB_SOURCE", ""),
 		RabbitMQUrl: getEnv("RABBITMQ_URL", ""),
 		PostgresUrl: getEnv("POSTGRES_URL", ""),
-		Port:        getEnv("PORT", "8080"),
+		Port:        getEnv("PORT", "8000"),
 		Environment: getEnv("ENVIRONMENT", "development"),
 		POSTMARKServerToken: getEnv("POSTMARK_SERVER_TOKEN", ""),
 		POSTMARKAccountToken: getEnv("POSTMARK_ACCOUNT_TOKEN", ""),

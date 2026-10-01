@@ -13,6 +13,7 @@ type NotificationResponse struct {
 	IsRead      bool      `json:"is_read"`
 	Data        string    `json:"data"`
 	InventoryID *uuid.UUID `json:"inventory_id,omitempty"`
+	StoreID *uuid.UUID `json:"store_id,omitempty"`
 	CreatedAt   string    `json:"created_at"`
 }
 

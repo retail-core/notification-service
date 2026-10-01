@@ -13,10 +13,17 @@ import (
 type RabbitConnection struct {
 	conn *amqp.Connection
 	ch   *amqp.Channel
+	url  string
+}
+
+func NewRabbitConnection(url string) *RabbitConnection {
+	r := &RabbitConnection{url: url}
+	r.connect()
+	return r
 }
 
 // NewRabbitConnection creates and returns a connected RabbitMQ instance.
-func NewRabbitConnection(url string) *RabbitConnection {
+func NewRabbitConnectionOld2(url string) *RabbitConnection {
 	var err error
 	var conn *amqp.Connection
 
@@ -27,7 +34,7 @@ func NewRabbitConnection(url string) *RabbitConnection {
 		}
 		logger.L().Info("failed to connect to RabbitMQ, Retrying to connect...")
 		time.Sleep(5 * time.Second)
-	} 
+	}
 
 	failOnError(err, "failed to connect to RabbitMQ")
 
@@ -37,6 +44,24 @@ func NewRabbitConnection(url string) *RabbitConnection {
 	logger.L().Info("✅ connected to RabbitMQ successfully")
 
 	return &RabbitConnection{conn: conn, ch: ch}
+}
+
+func (r *RabbitConnection) connect() {
+	var err error
+	for i := 0; i < 10; i++ {
+		r.conn, err = amqp.Dial(r.url)
+		if err == nil {
+			break
+		}
+		logger.L().Info("failed to connect to RabbitMQ, retrying...")
+		time.Sleep(5 * time.Second)
+	}
+	failOnError(err, "failed to connect to RabbitMQ")
+
+	r.ch, err = r.conn.Channel()
+	failOnError(err, "failed to open RabbitMQ channel")
+
+	logger.L().Info("✅ connected to RabbitMQ successfully")
 }
 
 func (r *RabbitConnection) DeclareQueue(name string) amqp.Queue {
@@ -79,11 +104,10 @@ func (r *RabbitConnection) Close() {
 }
 
 func failOnError(err error, msg string) {
-  if err != nil {
-    log.Panicf("%s: %s", msg, err)
-  }
+	if err != nil {
+		log.Panicf("%s: %s", msg, err)
+	}
 }
-
 
 func (r *RabbitConnection) ConsumeNotifications(d *dispatcher.Dispatcher) error {
 	ch, err := r.conn.Channel()
@@ -105,12 +129,16 @@ func (r *RabbitConnection) ConsumeNotifications(d *dispatcher.Dispatcher) error 
 		if err != nil {
 			return err
 		}
-
 		go func(c string, deliveries <-chan amqp.Delivery) {
 			for msg := range deliveries {
-				d.Dispatch(msg.Body) // dispatcher figures out which handler to call
-				msg.Ack(false) // TODO: handle error
+				if err := d.Dispatch(msg.Body); err != nil {
+					logger.L().Error("dispatch failed, requeueing", zap.String("channel", c), zap.Error(err))
+					msg.Nack(false, true) // requeue instead of silently acking a loss
+					continue
+				}
+				msg.Ack(false)
 			}
+
 		}(string(c), msgs)
 	}
 
@@ -124,7 +152,7 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 	if err := r.ch.ExchangeDeclare(
 		exchange,
 		"topic", // simple routing by key: "email", "sms", "inapp"
-		true,     // durable
+		true,    // durable
 		false,
 		false,
 		false,
@@ -162,8 +190,8 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 		// Bind queue to exchange using routing key = channel
 		if err := r.ch.QueueBind(
 			q.Name,
-			string(channel),   // routing key (email/sms/inapp)
-			exchange,  // exchange
+			string(channel), // routing key (email/sms/inapp)
+			exchange,        // exchange
 			false,
 			nil,
 		); err != nil {
@@ -174,4 +202,33 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 
 	logger.L().Info("✅ RabbitMQ notification bindings set up successfully DDL")
 	return nil
+}
+
+// call this AFTER SetupNotificationBindings, wraps ConsumeNotifications with
+// auto-reconnect whenever the connection drops
+func (r *RabbitConnection) ConsumeNotificationsWithReconnect(d *dispatcher.Dispatcher) {
+	for {
+		closeCh := make(chan *amqp.Error)
+		r.conn.NotifyClose(closeCh)
+
+		if err := r.ConsumeNotifications(d); err != nil {
+			logger.L().Error("failed to start consuming, retrying in 5s", zap.Error(err))
+			time.Sleep(5 * time.Second)
+			r.connect()
+			if err := r.SetupNotificationBindings(); err != nil {
+				logger.L().Error("failed to rebind after reconnect", zap.Error(err))
+			}
+			continue
+		}
+
+		// block here until the connection dies
+		reason := <-closeCh
+		logger.L().Error("🔌 RabbitMQ connection lost, reconnecting...", zap.Any("reason", reason))
+
+		time.Sleep(5 * time.Second)
+		r.connect()
+		if err := r.SetupNotificationBindings(); err != nil {
+			logger.L().Error("failed to rebind after reconnect", zap.Error(err))
+		}
+	}
 }

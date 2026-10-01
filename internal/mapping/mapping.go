@@ -15,6 +15,7 @@ func ToNotificationResponse(notification models.Notification) dtos.NotificationR
 		IsRead:    notification.IsRead,
 		Data:      string(notification.Data),
 		InventoryID: notification.InventoryID,
+		StoreID: notification.StoreID,
 		CreatedAt: notification.CreatedAt.String(),
 	}
 }

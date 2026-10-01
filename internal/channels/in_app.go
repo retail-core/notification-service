@@ -14,11 +14,12 @@ import (
 )
 
 type NotificationInApp struct {
-	UserID  string `json:"user_id"`
-	Message string `json:"message"`
-	Title   string `json:"title"`
-	Type    string `json:"type"`
+	UserID      string     `json:"user_id"`
+	Message     string     `json:"message"`
+	Title       string     `json:"title"`
+	Type        string     `json:"type"`
 	InventoryID *uuid.UUID `json:"inventory_id,omitempty"`
+	StoreID     *uuid.UUID `json:"store_id,omitempty"`
 }
 
 type InAppHandler struct {
@@ -34,9 +35,16 @@ func (h *InAppHandler) Send(notification dispatcher.Notification) error {
 	log := logger.L()
 
 	var inventoryID *uuid.UUID
+	var storeID *uuid.UUID
+
 	if s := notification.Data["inventory_id"]; s != "" {
 		u := uuid.FromStringOrNil(s)
 		inventoryID = &u
+	}
+
+	if s := notification.Data["store_id"]; s != "" {
+		u := uuid.FromStringOrNil(s)
+		storeID = &u
 	}
 
 	req := NotificationInApp{
@@ -45,6 +53,7 @@ func (h *InAppHandler) Send(notification dispatcher.Notification) error {
 		Title:       notification.Data["title"],
 		Type:        notification.Data["type"],
 		InventoryID: inventoryID,
+		StoreID:     storeID,
 	}
 
 	payload, err := json.Marshal(req)
@@ -56,6 +65,7 @@ func (h *InAppHandler) Send(notification dispatcher.Notification) error {
 	client, ok := h.hub.Clients[req.UserID]
 	if !ok {
 		log.Warn("No active WebSocket client for user", zap.String("user_id", req.UserID))
+		_ = __CreateNotificationInDB(context.Background(), h.repository, req)
 		return nil
 	}
 
@@ -75,6 +85,7 @@ func __CreateNotificationInDB(ctx context.Context, repo repository.NotificationR
 		IsActedUpon: false,
 		InventoryID: req.InventoryID,
 		Data:        nil,
+		StoreID: req.StoreID,
 	}
 
 	if _, err := repo.CreateNotification(ctx, notificationModel); err != nil {

@@ -2,6 +2,8 @@ package dispatcher
 
 import (
 	"encoding/json"
+	"fmt"
+
 	"github.com/retail-core/notification-service/internal/logger"
 	"go.uber.org/zap"
 )
@@ -42,7 +44,7 @@ func (d *Dispatcher) Register(channel NotChannel, handler Handler) {
 	d.handlers[channel] = handler
 }
 
-func (d *Dispatcher) Dispatch(rawMsg []byte)  {
+func (d *Dispatcher) DispatchOld(rawMsg []byte)  {
 	var notification Notification
 	if err := json.Unmarshal(rawMsg, &notification); err != nil {
 		logger.L().Error("Failed to unmarshal notification", zap.Error(err))
@@ -58,4 +60,26 @@ func (d *Dispatcher) Dispatch(rawMsg []byte)  {
 	if err := handler.Send(notification); err != nil {
 		logger.L().Error("Failed to send notification", zap.Error(err))
 	}
+}
+
+
+func (d *Dispatcher) Dispatch(rawMsg []byte) error {
+	var notification Notification
+	if err := json.Unmarshal(rawMsg, &notification); err != nil {
+		logger.L().Error("Failed to unmarshal notification", zap.Error(err))
+		return err // bad payload — don't requeue, see note below
+	}
+
+	handler, ok := d.handlers[notification.Channel]
+	if !ok {
+		logger.L().Error("No handler registered for channel", zap.String("channel", string(notification.Channel)))
+		return fmt.Errorf("no handler for channel %s", notification.Channel)
+	}
+
+	if err := handler.Send(notification); err != nil {
+		logger.L().Error("Failed to send notification", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

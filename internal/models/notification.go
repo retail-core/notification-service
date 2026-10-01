@@ -37,6 +37,8 @@ type Notification struct {
 
 	InventoryID *uuid.UUID `gorm:"type:varchar(200);default:null"`
 
+	StoreID *uuid.UUID `gorm:"type:varchar(200);default:null"`
+
 	Data datatypes.JSON `gorm:"type:jsonb"`
 }
 
