@@ -10,6 +10,13 @@ import (
 
 type NotChannel string
 
+// PermanentError marks a failure that retrying cannot fix.
+type PermanentError struct{ Err error }
+
+func (e *PermanentError) Error() string { return e.Err.Error() }
+func (e *PermanentError) Unwrap() error { return e.Err }
+
+
 const (
 	EmailChannel NotChannel = "email"
 	SMSChannel   NotChannel = "sms"
@@ -64,6 +71,21 @@ func (d *Dispatcher) DispatchOld(rawMsg []byte)  {
 
 
 func (d *Dispatcher) Dispatch(rawMsg []byte) error {
+	var notification Notification
+	if err := json.Unmarshal(rawMsg, &notification); err != nil {
+		return &PermanentError{Err: fmt.Errorf("invalid payload: %w", err)}
+	}
+
+	handler, ok := d.handlers[notification.Channel]
+	if !ok {
+		return &PermanentError{Err: fmt.Errorf("no handler for channel %s", notification.Channel)}
+	}
+
+	return handler.Send(notification)
+}
+
+
+func (d *Dispatcher) Dispatch_Old(rawMsg []byte) error {
 	var notification Notification
 	if err := json.Unmarshal(rawMsg, &notification); err != nil {
 		logger.L().Error("Failed to unmarshal notification", zap.Error(err))

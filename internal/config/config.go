@@ -32,7 +32,7 @@ func LoadConfig() *Config {
 		POSTMARKServerToken: getEnv("POSTMARK_SERVER_TOKEN", ""),
 		POSTMARKAccountToken: getEnv("POSTMARK_ACCOUNT_TOKEN", ""),
 		POSTMARKFromEmail:    getEnv("POSTMARK_FROM_EMAIL", "info@jarabiz.com"),
-		POSTMARKFromName:     getEnv("POSTMARK_FROM_NAME", "Jara-Biz"),
+		POSTMARKFromName:     getEnv("POSTMARK_FROM_NAME", "Oja"),
 		POSTMARKToEmail:      getEnv("POSTMARK_TO_EMAIL", "hello@jarabiz.com"),
 	}
 	}

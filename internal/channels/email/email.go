@@ -68,11 +68,13 @@ func (p *EmailHandler) Send(notification dispatcher.Notification) error {
 		TemplateModel: templateModel,
 	}
 
-	res, err := p.client.SendTemplatedEmail(context.Background(), email)
 
+	res, err := p.client.SendTemplatedEmail(context.Background(), email)
 	if err != nil {
-		log.Error("Failed to send email via Postmark", zap.Error(err))
-		return err
+		if isPermanentPostmarkError(int64(res.ErrorCode)) {
+			return &dispatcher.PermanentError{Err: err}
+		}
+		return err // network, 5xx, 429, etc. are retryable
 	}
 
 	log.Info("Email sent via Postmark", zap.String("to", notification.To), zap.String("messageID", res.MessageID))
@@ -90,4 +92,14 @@ func (p *EmailHandler) resolveRecipient(n dispatcher.Notification) string {
 	// 	return n.To
 	// }
 	// return p.fromEmail
+}
+
+// Postmark codes tied to this specific message; retrying can't succeed.
+// 300 invalid email, 402/403 bad JSON, 406 inactive recipient.
+func isPermanentPostmarkError(code int64) bool {
+	switch code {
+	case 300, 402, 403, 406:
+		return true
+	}
+	return false
 }

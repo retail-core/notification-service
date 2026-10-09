@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"errors"
 	"log"
 	"time"
 
@@ -20,30 +21,6 @@ func NewRabbitConnection(url string) *RabbitConnection {
 	r := &RabbitConnection{url: url}
 	r.connect()
 	return r
-}
-
-// NewRabbitConnection creates and returns a connected RabbitMQ instance.
-func NewRabbitConnectionOld2(url string) *RabbitConnection {
-	var err error
-	var conn *amqp.Connection
-
-	for i := 0; i < 10; i++ {
-		conn, err = amqp.Dial(url)
-		if err == nil {
-			break
-		}
-		logger.L().Info("failed to connect to RabbitMQ, Retrying to connect...")
-		time.Sleep(5 * time.Second)
-	}
-
-	failOnError(err, "failed to connect to RabbitMQ")
-
-	ch, err := conn.Channel()
-	failOnError(err, "failed to open RabbitMQ channel")
-
-	logger.L().Info("✅ connected to RabbitMQ successfully")
-
-	return &RabbitConnection{conn: conn, ch: ch}
 }
 
 func (r *RabbitConnection) connect() {
@@ -131,9 +108,9 @@ func (r *RabbitConnection) ConsumeNotifications(d *dispatcher.Dispatcher) error 
 		}
 		go func(c string, deliveries <-chan amqp.Delivery) {
 			for msg := range deliveries {
-				if err := d.Dispatch(msg.Body); err != nil {
-					logger.L().Error("dispatch failed, requeueing", zap.String("channel", c), zap.Error(err))
-					msg.Nack(false, true) // requeue instead of silently acking a loss
+				if err := dispatchWithRetry(d, msg.Body); err != nil {
+					logger.L().Error("dispatch failed, dead-lettering", zap.String("channel", c), zap.Error(err))
+					msg.Nack(false, false) // no requeue → DLX/DLQ
 					continue
 				}
 				msg.Ack(false)
@@ -148,7 +125,6 @@ func (r *RabbitConnection) ConsumeNotifications(d *dispatcher.Dispatcher) error 
 func (r *RabbitConnection) SetupNotificationBindings() error {
 	exchange := "notifications"
 
-	// Declare the exchange
 	if err := r.ch.ExchangeDeclare(
 		exchange,
 		"topic", // simple routing by key: "email", "sms", "inapp"
@@ -158,6 +134,16 @@ func (r *RabbitConnection) SetupNotificationBindings() error {
 		false,
 		nil,
 	); err != nil {
+		return err
+	}
+
+	if err := r.ch.ExchangeDeclare("notifications.dlx", "fanout", true, false, false, false, nil); err != nil {
+		return err
+	}
+	if _, err := r.ch.QueueDeclare("notifications.dlq", true, false, false, false, nil); err != nil {
+		return err
+	}
+	if err := r.ch.QueueBind("notifications.dlq", "", "notifications.dlx", false, nil); err != nil {
 		return err
 	}
 
@@ -231,4 +217,27 @@ func (r *RabbitConnection) ConsumeNotificationsWithReconnect(d *dispatcher.Dispa
 			logger.L().Error("failed to rebind after reconnect", zap.Error(err))
 		}
 	}
+}
+
+const (
+	maxAttempts = 3
+	baseBackoff = 2 * time.Second
+)
+
+func dispatchWithRetry(d *dispatcher.Dispatcher, body []byte) error {
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err = d.Dispatch(body); err == nil {
+			return nil
+		}
+		var perm *dispatcher.PermanentError
+		if errors.As(err, &perm) {
+			return err
+		}
+		if attempt < maxAttempts {
+			logger.L().Warn("dispatch failed, retrying", zap.Int("attempt", attempt), zap.Error(err))
+			time.Sleep(baseBackoff * time.Duration(1<<(attempt-1)))
+		}
+	}
+	return err
 }
